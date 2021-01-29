@@ -1,7 +1,7 @@
 blueprint:
   name: Door Activated Light
   domain: automation
-  source_url: https://gist.github.com/nickneos/d08d8956e465260e7e88a5c1e574e358
+  source_url: https://github.com/nickneos/HA-Blueprints/blob/main/door_light.yaml
   input:
     door_sensor:
       name: Door Sensor
