@@ -1,0 +1,80 @@
+blueprint:
+  name: Door Activated Light
+  domain: automation
+  source_url: https://gist.github.com/nickneos/d08d8956e465260e7e88a5c1e574e358
+  input:
+    door_sensor:
+      name: Door Sensor
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: opening
+    light_target:
+      name: Light
+      selector:
+        target:
+          entity:
+            domain: light
+    no_motion_wait:
+      name: Wait time
+      description: Time to wait until the light should be turned off.
+      default: 120
+      selector:
+        number:
+          min: 0.0
+          max: 3600.0
+          unit_of_measurement: seconds
+          step: 1.0
+          mode: slider
+    below_elevation:
+      name: Below sun elevation
+      description: Solar elevation. This is the angle between the sun and the horizon.
+        Negative values mean the sun is below the horizon. 90 will always be TRUE
+      default: 90
+      selector:
+        number:
+          min: -90.0
+          max: 90.0
+          unit_of_measurement: degrees
+          step: 1.0
+          mode: slider
+    toggle_entity:
+      name: (OPTIONAL) Toggle
+      description: When using an input_boolean to enable/disable this automation.
+      default:
+      selector:
+        entity:
+          domain: input_boolean
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  below_elevation: !input 'below_elevation'
+  toggle_entity: !input 'toggle_entity'
+  
+trigger:
+  platform: state
+  entity_id: !input 'door_sensor'
+  from: 'off'
+  to: 'on'
+  
+condition:
+- condition: template
+  value_template: '{{ (toggle_entity == none) or (states[toggle_entity].state == ''on'')
+    }}'
+- condition: template
+  value_template: '{{ state_attr(''sun.sun'',''elevation'') <= (below_elevation |
+    float)}}'
+    
+action:
+- service: light.turn_on
+  target: !input 'light_target'
+- wait_for_trigger:
+    platform: state
+    entity_id: !input 'door_sensor'
+    from: 'on'
+    to: 'off'
+- delay: !input 'no_motion_wait'
+- service: light.turn_off
+  target: !input 'light_target'
