@@ -1,5 +1,5 @@
 blueprint:
-  name: Motion Activated Light with Options
+  name: Motion Activated Light
   domain: automation
   source_url: https://github.com/nickneos/HA-Blueprints/blob/main/motion_light.yaml
   input:
@@ -24,12 +24,15 @@ blueprint:
           min: 0.0
           max: 3600.0
           unit_of_measurement: seconds
-          step: 1.0
+          step: 30.0
           mode: slider
     below_elevation:
-      name: Below sun elevation
-      description: Solar elevation. This is the angle between the sun and the horizon.
-        Negative values mean the sun is below the horizon. 90 will always be TRUE
+      name: Below solar elevation
+      description: Solar elevation is the angle between the sun and the horizon. 
+        Negative values mean the sun is below the horizon. This automation will 
+        only run if the solar elevation is below the value you set. Leave the 
+        value at 90 if you want the automation to always run regardless of the
+        solar elevation.
       default: 90
       selector:
         number:
