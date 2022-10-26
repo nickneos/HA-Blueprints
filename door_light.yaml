@@ -3,12 +3,19 @@ blueprint:
   domain: automation
   source_url: https://github.com/nickneos/HA-Blueprints/blob/main/door_light.yaml
   input:
-    door_sensor:
+    trigger_door:
       name: Door Sensor
+      default: binary_sensor.none
       selector:
         entity:
           domain: binary_sensor
-          device_class: opening
+          device_class: door
+    trigger_cover:
+      name: Cover Sensor
+      default: cover.none
+      selector:
+        entity:
+          domain: cover
     light_target:
       name: Light
       selector:
@@ -18,14 +25,10 @@ blueprint:
     no_motion_wait:
       name: Wait time
       description: Time to wait until the light should be turned off.
-      default: 120
+      default:
+        minutes: 5
       selector:
-        number:
-          min: 0.0
-          max: 3600.0
-          unit_of_measurement: seconds
-          step: 30.0
-          mode: slider
+        duration:
     below_elevation:
       name: Below solar elevation
       description: Solar elevation is the angle between the sun and the horizon. 
@@ -41,43 +44,66 @@ blueprint:
           unit_of_measurement: degrees
           step: 1.0
           mode: slider
-    toggle_entity:
-      name: (OPTIONAL) Toggle
-      description: When using an input_boolean to enable/disable this automation.
-      default:
+    presence_constraint:
+      name: Someone Home Contsraint
+      description: Enable if you only want this automation to run if someone is home.
+        NOTE this is based on the person domain not the device_tracker domain.
+      default: false
       selector:
-        entity:
-          domain: input_boolean
+        boolean:
 
 mode: restart
 max_exceeded: silent
 
 variables:
   below_elevation: !input 'below_elevation'
-  toggle_entity: !input 'toggle_entity'
-  
+  is_below_elevation: "{{ state_attr('sun.sun','elevation') <= (below_elevation | float)}}"
+  presence_enabled: !input 'presence_constraint'
+  presence_disabled: "{{ not presence_enabled }}"
+  someone_home: "{{ states.person | selectattr('state','eq','home') | list | count > 0 }}"
+
+
 trigger:
-  platform: state
-  entity_id: !input 'door_sensor'
-  from: 'off'
-  to: 'on'
-  
+  - platform: state
+    entity_id: !input trigger_door
+    from: 'off'
+    to: 'on'
+    id: door
+  - platform: state
+    entity_id: !input trigger_cover
+    from: 'closed'
+    to: 'open'
+    for: '00:00:01'
+    id: cover
+
 condition:
-- condition: template
-  value_template: '{{ (toggle_entity == none) or (states[toggle_entity].state == ''on'')
-    }}'
-- condition: template
-  value_template: '{{ state_attr(''sun.sun'',''elevation'') <= (below_elevation |
-    float)}}'
-    
+  - "{{ is_below_elevation }}"
+  - "{{ someone_home or presence_disabled }}"
+
 action:
 - service: light.turn_on
   target: !input 'light_target'
-- wait_for_trigger:
-    platform: state
-    entity_id: !input 'door_sensor'
-    from: 'on'
-    to: 'off'
+- choose:
+  - conditions:
+    - condition: trigger
+      id: door
+    sequence:
+    - wait_for_trigger:
+        platform: state
+        entity_id: !input 'trigger_door'
+        from: 'on'
+        to: 'off'
+  - conditions:
+    - condition: trigger
+      id: cover
+    sequence:
+    - wait_for_trigger:
+        platform: state
+        entity_id: !input 'trigger_cover'
+        from: 'open'
+        to: 'closed'
+        for: '00:00:01'
+  default: []
 - delay: !input 'no_motion_wait'
 - service: light.turn_off
   target: !input 'light_target'

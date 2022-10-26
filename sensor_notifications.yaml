@@ -1,0 +1,129 @@
+blueprint:
+  name: Sensor Notifications
+  description: Send a notification when a sensor is tripped.
+  domain: automation
+  source_url: https://github.com/nickneos/HA-Blueprints/blob/main/sensor_notifications.yaml
+  input:
+    sensors:
+      name: Sensor(s)
+      selector:
+        entity:
+          domain: ['binary_sensor', 'cover']
+          multiple: true
+    notify_service_call:
+      name: Notification Service
+      description: Service to call in home assistant for sending the notification eg. notify.galaxy_s22
+      default: notify.my_phones
+      selector:
+        text:
+    email_enabled:
+      name: Also send email
+      description: Enable if you want an email sent in addition to the notification
+      default: false
+      selector:
+        boolean:
+    email_service_call:
+      name: Email Service
+      description: Service to call in home assistant for sending the email if enabled eg. notify.gmail
+      default: notify.gmail
+      selector:
+        text:
+    only_when_unnocupied:
+      name: Enable Only When Home Unoccupied
+      description: Enable if you only want this automation to run if no one is home.
+        NOTE this is based on the person domain not the device_tracker domain.
+      default: false
+      selector:
+        boolean:
+
+mode: queued
+max: 10
+
+variables:
+  only_when_unnocupied: !input 'only_when_unnocupied'
+  noone_home: "{{ states.person | selectattr('state','eq','home') | list | count == 0 }}"
+  email_service: !input 'email_service_call'
+  email_enabled: !input 'email_enabled'
+trigger:
+  platform: state
+  entity_id: !input sensors
+  to: ['on','open']
+
+condition:
+  - "{{ noone_home or (not only_when_unnocupied) }}"
+
+
+action:
+# send notification
+- choose:
+  - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'motion' }}"
+    sequence:
+    - service: !input notify_service_call
+      data:
+        title: Motion Detected
+        message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+        data:
+          tag: AM_{{ trigger.entity_id }}
+  - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'door' }}"
+    sequence:
+    - service: !input notify_service_call
+      data:
+        title: Door Opened
+        message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+        data:
+          tag: AM_{{ trigger.entity_id }}
+  - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'garage' }}"
+    sequence:
+    - service: !input notify_service_call
+      data:
+        title: Garage Opened
+        message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+        data:
+          tag: AM_{{ trigger.entity_id }}
+  - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'moisture' }}"
+    sequence:
+    - service: !input notify_service_call
+      data:
+        title: Water Leak Detected
+        message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+  default:
+  - service: !input notify_service_call
+    data:
+      title: Sensor Tripped
+      message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+      data:
+        tag: AM_{{ trigger.entity_id }}
+# send email if enabled
+- choose:
+  - conditions: "{{ email_enabled }}"
+    sequence:
+    - choose:
+      - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'motion' }}"
+        sequence:
+        - service: !input email_service_call
+          data:
+            title: "Motion Detected [{{ trigger.entity_id }}]"
+            message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+      - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'door' }}"
+        sequence:
+        - service: !input email_service_call
+          data:
+            title: "Door Opened [{{ trigger.entity_id }}]"
+            message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+      - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'garage' }}"
+        sequence:
+        - service: !input email_service_call
+          data:
+            title: "Garage Opened [{{ trigger.entity_id }}]"
+            message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+      - conditions: "{{ state_attr( trigger.entity_id , 'device_class') ==  'moisture' }}"
+        sequence:
+        - service: !input email_service_call
+          data:
+            title: "Water Leak Detected [{{ trigger.entity_id }}]"
+            message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"
+      default:
+      - service: !input email_service_call
+        data:
+          title: "Sensor Tripped [{{ trigger.entity_id }}]"
+          message: "{{ state_attr( trigger.entity_id , 'friendly_name') }}"

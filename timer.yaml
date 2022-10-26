@@ -1,0 +1,86 @@
+blueprint:
+  name: Timer
+  description: TBA
+  domain: automation
+  source_url: https://github.com/nickneos/HA-Blueprints/blob/main/timer.yaml
+  input:
+    input_number_entity:
+      name: Input Number Entity
+      selector:
+        entity:
+          domain: input_number
+    timer_entity:
+      name: Timer Entity
+      selector:
+        entity:
+          domain: timer
+    target_entity:
+      name: Entity to turn off
+      selector:
+        entity: 
+          domain: ['climate','light']
+
+mode: restart
+max_exceeded: silent
+
+variables:
+  input_num: !input input_number_entity
+
+trigger:
+- platform: state
+  entity_id: !input input_number_entity
+  id: num
+- platform: event
+  event_type: timer.finished
+  event_data:
+    entity_id: !input timer_entity
+  id: end
+condition: []
+
+action:
+- choose:
+  - conditions:
+    - condition: trigger
+      id: num
+    sequence:
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: !input target_entity
+          state: 'off'
+        sequence:
+        - service: input_number.set_value
+          data:
+            value: 0
+          target:
+            entity_id: !input input_number_entity
+      - conditions:
+        - condition: template
+          value_template: '{{ states(input_num) | float > 0 }}'
+        sequence:
+        - service: timer.start
+          data:
+            duration: '{{ states(input_num) | float * 60 }}'
+          target:
+            entity_id: !input timer_entity
+      - conditions:
+        - condition: template
+          value_template: '{{ states(input_num) | float <= 0 }}'
+        sequence:
+        - service: timer.cancel
+          target:
+            entity_id: !input timer_entity
+      default: []
+  - conditions:
+    - condition: trigger
+      id: end
+    sequence:
+    - service: homeassistant.turn_off
+      target:
+        entity_id: !input target_entity
+    - service: input_number.set_value
+      data:
+        value: 0
+      target:
+        entity_id: !input input_number_entity
+  default: []
